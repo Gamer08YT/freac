@@ -8,7 +8,11 @@ jobs=12
 
 # Query OS and machine
 uname=`uname`
-machine=`gcc -dumpmachine`
+if [[ ! -z $CC ]]; then
+  machine=`$CC -dumpmachine`
+else
+  machine=`gcc -dumpmachine`
+fi
 
 # Standard CFLAGS
 if [[ $uname == Darwin ]] && [[ $BUILD_PPC == True ]]; then
@@ -18,40 +22,58 @@ if [[ $uname == Darwin ]] && [[ $BUILD_PPC == True ]]; then
 elif [[ $uname == Darwin ]] && [[ $BUILD_X86 == True ]]; then
   cflags="-arch i386 -O3 -march=prescott"
   ldflags="-Wl,-x -arch i386"
+  x86=true
 elif [[ $uname == Darwin ]]; then
   cflags="-arch x86_64 -O3 -march=core2"
   ldflags="-Wl,-x -arch x86_64"
   x86_64=true
-elif [[ $BUILD_X86 == True ]] || (( [[ $uname == *MINGW* ]] && [[ $BUILD_X86_64 != True ]] )); then
-  cflags="-O3 -m32 -march=pentium4"
-  ldflags="-m32"
-elif [[ $machine == *amd64* ]] || [[ $machine == *x86_64* ]]; then
+elif [[ $machine == *amd64* || $machine == *x86_64* ]] && [[ $BUILD_X86 != True ]] && [[ $uname != *MINGW* || $BUILD_X86_64 == True ]]; then
   cflags="-O3 -m64 -march=nocona -mno-sse3"
   ldflags="-m64"
   x86_64=true
 elif [[ $machine == *aarch64* ]]; then
-  cflags="-O3 -march=armv8-a"
+  cflags="-O3 -march=armv8-a+simd"
   arm64=true
+elif [[ $machine == *arm* ]]; then
+  cflags="-O3 -march=armv7-a+simd"
+  arm=true
 else
   cflags="-O3 -m32 -march=pentium4"
   ldflags="-m32"
+  x86=true
 fi
 
 cflags_unroll="-funroll-loops"
 
 # Set compiler and tools
 if [[ $uname != *FreeBSD* ]]; then
-  export CC=gcc
-  export CXX=gcc
+  if [[ -z $CC ]]; then
+    export CC=gcc
+    export CXX=gcc
+  fi
   export MAKE=make
   export SUDO=sudo
   export PATCH="patch --binary"
 else
-  export CC=clang
-  export CXX=clang
+  if [[ -z $CC ]]; then
+    export CC=clang
+    export CXX=clang
+  fi
   export MAKE=gmake
   export SUDO=sudo
   export PATCH=patch
+fi
+
+if [[ $uname == Linux ]]; then
+  if [[ $x86_64 == true ]]; then
+    host="--host=x86_64-linux-gnu"
+  elif [[ $x86 == true ]]; then
+    host="--host=i386-linux-gnu"
+  elif [[ $arm64 == true ]]; then
+    host="--host=aarch64-linux-gnu"
+  elif [[ $arm == true ]]; then
+    host="--host=arm-linux-gnueabihf"
+  fi
 fi
 
 if [[ $uname == Haiku ]]; then
@@ -187,7 +209,7 @@ build () {
   done
 
   eval $prepare
-  eval $configure_exports ./configure $configure_flags $prefix
+  eval $configure_exports ./configure $host $configure_flags $prefix
   $MAKE -j$jobs
 
   index=0
@@ -297,7 +319,7 @@ for package in ${packages[@]}; do
     if [[ $ppc == true ]]; then
       patches=${lame_patches_ppc[@]}
       patch_levels=(${lame_patch_levels_ppc[@]})
-    elif [[ $arm64 != true ]]; then
+    elif [[ $x86 == true ]] || [[ $x86_64 == true ]]; then
       patches=${lame_patches[@]}
       patch_levels=(${lame_patch_levels[@]})
     fi
@@ -308,7 +330,7 @@ for package in ${packages[@]}; do
     fi
     if [[ $ppc == true ]]; then
         export CFLAGS="$cflags $cflags_unroll -faltivec -DALTIVEC"
-    elif [[ $x86_64 != true ]] && [[ $arm64 != true ]]; then
+    elif [[ $x86 == true ]]; then
       if [[ $uname == *MINGW* ]] || [[ $uname == FreeBSD ]] || [[ $uname == Darwin ]]; then
         export CFLAGS="$cflags $cflags_unroll -mfpmath=sse"
       fi
@@ -330,7 +352,7 @@ for package in ${packages[@]}; do
         configure_flags="$configure_flags --arch=ppc"
       elif [[ $x86_64 == true ]]; then
         configure_flags="$configure_flags --arch=x86_64"
-      else
+      elif [[ $x86 == true ]]; then
         configure_flags="$configure_flags --arch=i386"
       fi
     fi
@@ -363,11 +385,8 @@ for package in ${packages[@]}; do
     prepare="wget -O Cfg/config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=058639b'; wget -O Cfg/config.sub 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=058639b'"
     if [[ $uname == Darwin ]]; then
       prepare="$prepare; sed -i -e \"s/typedef struct AUDIO_OUT_s/struct AUDIO_OUT_s/\" examples/audio_out.c && sed -i -e \"s/} AUDIO_OUT ;/} AUDIO_OUT_s ;/\" examples/audio_out.c"
-    fi
-    if [[ $x86_64 == true ]]; then
-      if [[ $uname != FreeBSD ]]; then
-        export CFLAGS="$cflags $cflags_unroll -mfpmath=387"
-      fi
+    elif [[ $uname != FreeBSD ]] && [[ $x86_64 == true ]]; then
+      export CFLAGS="$cflags $cflags_unroll -mfpmath=387"
     fi
     build $libsamplerate_location src/.libs/libsamplerate$sharedinfix.$sharedext SampleRate.$sharedext
 
@@ -375,11 +394,8 @@ for package in ${packages[@]}; do
     # Build libsndfile
     if [[ $uname == Darwin ]]; then
       prepare="sed -i -e \"s/ -Wvla//\" configure"
-    fi
-    if [[ $x86_64 != true ]] && [[ $arm64 != true ]] && [[ $ppc != true ]]; then
-      if [[ $uname == *MINGW* ]]; then
-        configure_exports="RC=\"windres -F pe-i386\""
-      fi
+    elif [[ $uname == *MINGW* ]] && [[ $x86 == true ]]; then
+      configure_exports="RC=\"windres -F pe-i386\""
     fi
     configure_flags="--disable-external-libs"
     build $libsndfile_location src/.libs/libsndfile$sharedinfix.$sharedext SndFile.$sharedext
@@ -423,7 +439,7 @@ for package in ${packages[@]}; do
       else
         configure_flags="$configure_flags --with-cpu=x86-64"
       fi
-    elif [[ $arm64 != true ]]; then
+    elif [[ $x86 == true ]]; then
       configure_flags="$configure_flags --with-cpu=sse"
     fi
     build $mpg123_location src/libmpg123/.libs/libmpg123$sharedinfix.$sharedext mpg123.$sharedext
@@ -436,7 +452,7 @@ for package in ${packages[@]}; do
 
   elif [ $package == opus ]; then
     # Build Opus
-    if [[ $x86_64 != true ]] && [[ $arm64 != true ]] && [[ $ppc != true ]]; then
+    if [[ $x86 == true ]]; then
       export CFLAGS="$cflags $cflags_unroll -mfpmath=sse"
     fi
     configure_flags="--enable-float-approx"
@@ -467,7 +483,7 @@ for package in ${packages[@]}; do
 
   elif [ $package == speex ]; then
     # Build Speex
-    if [[ $x86_64 != true ]] && [[ $arm64 != true ]] && [[ $ppc != true ]]; then
+    if [[ $x86 == true ]]; then
       export CFLAGS="$cflags $cflags_unroll -mfpmath=sse"
     fi
     build $speex_location libspeex/.libs/libspeex$sharedinfix.$sharedext Speex.$sharedext
@@ -476,7 +492,7 @@ for package in ${packages[@]}; do
     # Build Vorbis
     patches=${vorbis_patches[@]}
     patch_levels=(${vorbis_patch_levels[@]})
-    if [[ $x86_64 == true ]] || [[ $arm64 == true ]] || [[ $ppc == true ]]; then
+    if [[ $x86 != true ]]; then
       export CFLAGS="$cflags"
     else
       if [[ $uname == Darwin ]]; then
@@ -495,13 +511,12 @@ for package in ${packages[@]}; do
 
   elif [ $package == wavpack ]; then
     # Build WavPack
+    configure_flags="--disable-shared"
     if [[ $uname == *MINGW* ]]; then
       prepare="sed -i -e \"s/#ifndef LIBWAVPACK_VERSION_STRING/#ifndef LIBWAVPACK_VERSION_STRING2/\" src/common_utils.c"
-      configure_flags="--disable-shared --disable-asm"
+      configure_flags="$configure_flags --disable-asm"
     elif [[ $uname == Darwin ]]; then
-      configure_flags="--disable-shared --disable-asm"
-    else
-      configure_flags="--disable-shared"
+      configure_flags="$configure_flags --disable-asm"
     fi
     build $wavpack_location "cli/wavpack.$execext cli/wvunpack.$execext" "wavpack.$execext wvunpack.$execext"
   fi

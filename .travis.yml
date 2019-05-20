@@ -6,48 +6,149 @@ branches:
 
 matrix:
   include:
+#    - os: linux
+#      compiler: gcc
+#      addons:
+#        apt:
+#          packages:
+#            - libcurl4-openssl-dev
+#            - libgtk-3-dev
+#            - libncurses-dev
+#            - libpulse-dev
+#            - libudev-dev
+
+#    - os: linux
+#      compiler: clang
+#      addons:
+#        apt:
+#          packages:
+#            - libcurl4-openssl-dev
+#            - libgtk-3-dev
+#            - libncurses-dev
+#            - libpulse-dev
+#            - libudev-dev
+
+#    - os: osx
+#      compiler: gcc
+
+#    - os: osx
+#      compiler: clang
+
+#    - os: linux
+#      dist: trusty
+#      compiler: gcc
+#      env:
+#        - AppImageBuild=True
+#        - AppImageArch=x86_64
+#      addons:
+#        apt:
+#          packages:
+#            - g++-multilib
+#            - libasound2-dev
+#            - libgtk-3-dev
+#            - libncurses-dev
+#            - libpulse-dev
+#            - libssl-dev
+#            - libudev-dev
+#            - nasm
+#            - yasm
+#            - wine1.6-dev
+
+#    - os: linux
+#      dist: trusty
+#      compiler: gcc
+#      env:
+#        - AppImageBuild=True
+#        - AppImageArch=i686
+#      addons:
+#        apt:
+#          packages:
+#            - g++-multilib
+#            - gir1.2-atk-1.0:i386
+#            - gir1.2-freedesktop:i386
+#            - gir1.2-gdkpixbuf-2.0:i386
+#            - gir1.2-glib-2.0:i386
+#            - gir1.2-gtk-3.0:i386
+#            - gir1.2-pango-1.0:i386
+#            - libasound2-dev:i386
+#            - libatk1.0-dev:i386
+#            - libfuse2:i386
+#            - libgdk-pixbuf2.0-dev:i386
+#            - libgirepository-1.0-1:i386
+#            - libgtk-3-dev:i386
+#            - libncurses-dev:i386
+#            - libpango1.0-dev:i386
+#            - libpulse-dev:i386
+#            - libssl-dev:i386
+#            - libudev-dev:i386
+#            - libxft-dev:i386
+#            - nasm
+#            - yasm
+#            - wine1.6-dev:i386
+
     - os: linux
+      dist: trusty
       compiler: gcc
-      addons:
-        apt:
-          packages:
-            - libcurl4-openssl-dev
-            - libgtk-3-dev
-            - libpulse-dev
-            - libudev-dev
-
-    - os: linux
-      compiler: clang
-      addons:
-        apt:
-          packages:
-            - libcurl4-openssl-dev
-            - libgtk-3-dev
-            - libpulse-dev
-            - libudev-dev
-
-    - os: osx
-      compiler: gcc
-
-    - os: osx
-      compiler: clang
-
-    - os: linux
-      compiler: clang
       env:
         - AppImageBuild=True
+        - AppImageArch=armhf
       addons:
         apt:
           packages:
-            - g++-multilib
-            - libasound2-dev
-            - libgtk-3-dev
-            - libpulse-dev
-            - libssl-dev
-            - libudev-dev
-            - nasm
-            - yasm
-            - wine1.6-dev
+            - binfmt-support
+            - g++-arm-linux-gnueabihf
+            - qemu
+            - qemu-user-static
+
+    - os: linux
+      dist: trusty
+      compiler: gcc
+      env:
+        - AppImageBuild=True
+        - AppImageArch=aarch64
+      addons:
+        apt:
+          packages:
+            - binfmt-support
+            - g++-aarch64-linux-gnu
+            - qemu
+            - qemu-user-static
+
+before_install:
+  - |
+    if [ $AppImageBuild = True ]; then
+      if [ $AppImageArch = armhf ]; then
+        sudo dpkg --add-architecture armhf
+        sudo echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports trusty main restricted" >> /etc/apt/sources.list
+        sudo echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports trusty-updates main restricted" >> /etc/apt/sources.list
+        sudo echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports trusty-security main restricted" >> /etc/apt/sources.list
+        sudo sed -i 's/deb http/deb \[arch=amd64,i386\] http/g' /etc/apt/sources.list
+        sudo apt update
+        sudo apt install -y gir1.2-atk-1.0:armhf gir1.2-freedesktop:armhf gir1.2-gdkpixbuf-2.0:armhf gir1.2-glib-2.0:armhf gir1.2-gtk-3.0:armhf gir1.2-pango-1.0:armhf libasound2-dev:armhf libatk1.0-dev:armhf libfuse2:armhf libgdk-pixbuf2.0-dev:armhf libgirepository-1.0-1:armhf libgtk-3-dev:armhf libncurses-dev:armhf libpango1.0-dev:armhf libpulse-dev:armhf libssl-dev:armhf libudev-dev:armhf libxft-dev:armhf
+        sudo rm -f /usr/bin/gcc /usr/bin/g++ /usr/bin/cpp /usr/bin/ld /usr/bin/strip
+        sudo ln -s arm-linux-gnueabihf-gcc /usr/bin/gcc
+        sudo ln -s arm-linux-gnueabihf-g++ /usr/bin/g++
+        sudo ln -s arm-linux-gnueabihf-cpp /usr/bin/cpp
+        sudo ln -s arm-linux-gnueabihf-ld /usr/bin/ld
+        sudo ln -s arm-linux-gnueabihf-strip /usr/bin/strip
+      elif [ $AppImageArch = aarch64 ]; then
+        sudo dpkg --add-architecture arm64
+        sudo echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports trusty main restricted" >> /etc/apt/sources.list
+        sudo echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports trusty-updates main restricted" >> /etc/apt/sources.list
+        sudo echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports trusty-security main restricted" >> /etc/apt/sources.list
+        sudo sed -i 's/deb http/deb \[arch=amd64,i386\] http/g' /etc/apt/sources.list
+        sudo apt update
+        sudo apt remove libxdmcp-dev
+        sudo apt install -y libglib2.0:arm64
+        sudo apt install -y gir1.2-atk-1.0:arm64 gir1.2-freedesktop:arm64 gir1.2-gdkpixbuf-2.0:arm64 gir1.2-glib-2.0:arm64 gir1.2-gtk-3.0:arm64 gir1.2-pango-1.0:arm64 libasound2-dev:arm64 libatk1.0-dev:arm64 libfuse2:arm64 libgdk-pixbuf2.0-dev:arm64 libgirepository-1.0-1:arm64 libgtk-3-dev:arm64 libncurses-dev:arm64 libpango1.0-dev:arm64 libpulse-dev:arm64 libssl-dev:arm64 libudev-dev:arm64 libxft-dev:arm64
+        sudo rm -f /usr/bin/gcc /usr/bin/g++ /usr/bin/cpp /usr/bin/ld /usr/bin/strip
+        sudo ln -s aarch64-linux-gnu-gcc /usr/bin/gcc
+        sudo ln -s aarch64-linux-gnu-g++ /usr/bin/g++
+        sudo ln -s aarch64-linux-gnu-cpp /usr/bin/cpp
+        sudo ln -s aarch64-linux-gnu-ld /usr/bin/ld
+        sudo ln -s aarch64-linux-gnu-strip /usr/bin/strip
+      fi
+    fi
 
 install:
   - |
@@ -63,6 +164,21 @@ install:
 
 script:
   - |
+    # Set environment variables
+    if [ $AppImageBuild = True ]; then
+      export OS=`uname`
+      if [ $AppImageArch = i686 ]; then
+        export ARCH=i386-linux-gnu
+        export BUILD_X86=True
+      elif [ $AppImageArch = x86_64 ]; then
+        export ARCH=x86_64-linux-gnu
+      elif [ $AppImageArch = armhf ]; then
+        export ARCH=arm-linux-gnueabihf
+      elif [ $AppImageArch = aarch64 ]; then
+        export ARCH=aarch64-linux-gnu
+      fi
+    fi
+  - |
     # Build libcdio
     if [ $TRAVIS_OS_NAME != osx ]; then
       ./tools/build-codecs libcdio libcdio-paranoia
@@ -73,7 +189,7 @@ script:
       wget -c https://curl.haxx.se/download/curl-7.64.1.tar.bz2
       tar xfj curl-7.64.1.tar.bz2
       cd curl-7.64.1
-      ./configure --with-ssl --without-librtmp --disable-ldap
+      ./configure --host=$ARCH --with-ssl --without-librtmp --disable-ldap
       make -j$(nproc) && sudo make install
       cd ..
     fi
@@ -84,8 +200,18 @@ script:
     CONFIG="bundledlibbz2,bundledlibfribidi,bundledlibjpeg,bundledlibpng,bundledlibxml2,bundledzlib"
     if [ $AppImageBuild = True ]; then
       CONFIG+=",release"
+      if [ $AppImageArch = i686 ]; then
+        export PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig
+      elif [ $AppImageArch = armhf ]; then
+        export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+      elif [ $AppImageArch = aarch64 ]; then
+        export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+      fi
     fi
     make config=$CONFIG BUILD_V8=False -j$(nproc) && sudo make config=$CONFIG BUILD_V8=False install
+    if [ $AppImageBuild = True ] && [ $AppImageArch = i686 || $AppImageArch = armhf || $AppImageArch = aarch64 ]; then
+      unset PKG_CONFIG_PATH
+    fi
     cd ../..
   - |
     # Build BoCA
@@ -96,7 +222,7 @@ script:
       CONFIG+=",release"
     fi
     make config=$CONFIG -j$(nproc) && sudo make config=$CONFIG install
-    if [ $AppImageBuild = True ]; then
+    if [ $AppImageBuild = True ] && [ $AppImageArch = x86_64 ]; then
       # Build 32 bit Core Audio connector
       cd components/encoder/coreaudioconnect/connector
       make BUILD_X86=True config=$CONFIG clean && make BUILD_X86=True config=$CONFIG -j$(nproc)
@@ -113,8 +239,6 @@ script:
   - |
     # Create AppImage
     if [ $AppImageBuild = True ]; then
-      OS=`uname`
-      ARCH=`uname -m`
     # Build codecs
       ./tools/build-codecs faad2 fdk-aac mp4v2
       ./tools/build-codecs lame mpg123
@@ -174,13 +298,13 @@ script:
       cp /usr/local/lib/libcdio_cdda.so.2 appdir
       cp /usr/local/lib/libcdio_paranoia.so.2 appdir
       cp /usr/local/lib/libcurl.so.4 appdir
-      cp -P /lib/$ARCH-linux-gnu/libcrypto.so.1* appdir
-      cp -P /lib/$ARCH-linux-gnu/libssl.so.1* appdir
+      cp -P /lib/$ARCH/libcrypto.so.1* appdir
+      cp -P /lib/$ARCH/libssl.so.1* appdir
       strip --strip-all appdir/lib*.so*
     # Create AppImage using appimagetool
-      wget -c -nv "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$ARCH.AppImage"
-      chmod a+x appimagetool-$ARCH.AppImage
-      ARCH=$ARCH ./appimagetool-$ARCH.AppImage appdir freac-continuous-${OS,,}-$ARCH.AppImage
+      wget -c -nv "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$AppImageArch.AppImage"
+      chmod a+x appimagetool-$AppImageArch.AppImage
+      ARCH=$AppImageArch ./appimagetool-$AppImageArch.AppImage appdir freac-continuous-${OS,,}-$AppImageArch.AppImage
     # Upload AppImage to GitHub
       bash packaging/appimage/upload-appimage freac*.AppImage
     fi
